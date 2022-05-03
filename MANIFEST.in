@@ -1,0 +1,4 @@
+include sidestacker/schema.sql
+graft sidestacker/static
+graft sidestacker/templates
+global-exclude *.pyc

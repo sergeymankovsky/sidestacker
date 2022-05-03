@@ -1,0 +1,29 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<label class="form-label opponent" id="player{{ g.opponent }}" hidden>Player {{ g.opponent }}</label>
+<label class="form-label waiting"><span class="spinner-grow spinner-grow-sm text-warning"></span>
+    Waiting for Player 2...</label>
+<div class="board mx-auto mb-2" id="board">
+    {% for row in range(config.BOARD_ROWS) %}
+        {% for col in range(config.BOARD_COLS) %}
+            <button class="space" data-row="{{ row }}" data-col="{{ col }}" disabled></button>
+        {% endfor %}
+    {% endfor %}
+</div>
+{% if session['piece'] %}
+<label class="form-label" id="player{{ session['piece'] }}">Player {{ session['piece'] }}</label>
+{% endif %}
+<p id="status">Share game url with other player</p>
+<form method="post">
+    <button class="btn btn-secondary" id="end-game">End Game</button>
+</form>
+{% endblock %}
+
+{% block script %}
+<script src="https://cdn.socket.io/4.5.0/socket.io.min.js" integrity="sha384-7EyYLQZgWBi67fBtVxw60/OWl1kjsfrPFcaU0pp0nAh+i8FD068QogUvg85Ewy1k" crossorigin="anonymous"></script>
+<script src="{{ url_for('static', filename='game.js') }}"></script>
+<script>
+    const PIECE = {{ session['piece'] }}
+</script>
+{% endblock %}

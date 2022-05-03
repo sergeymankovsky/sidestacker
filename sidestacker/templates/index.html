@@ -1,0 +1,14 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="board mx-auto mb-2" id="board">
+    {% for row in range(config.BOARD_ROWS) %}
+        {% for col in range(config.BOARD_COLS) %}
+            <button class="space" data-row="{{ row }}" data-col="{{ col }}" disabled></button>
+        {% endfor %}
+    {% endfor %}
+</div>
+<form method="post">
+    <button class="btn btn-primary">Start Game</button>
+</form>
+{% endblock %}

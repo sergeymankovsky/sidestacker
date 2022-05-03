@@ -1,0 +1,48 @@
+:root {
+    --board-rows: 7;
+    --board-cols: 7;
+    --board-padding: 5px;
+    --board-border: 1px;
+    --space-size: 40px;
+    --space-margin: 2px;
+}
+
+.board {
+    height: calc(
+        (var(--space-size) + var(--space-margin) * 2) * var(--board-rows) +
+        (var(--board-padding) + var(--board-border)) * 2);
+    width:  calc(
+        (var(--space-size) + var(--space-margin) * 2) * var(--board-cols) +
+        (var(--board-padding) + var(--board-border)) * 2);
+    display: flex;
+    flex-wrap: wrap;
+    padding: var(--board-padding);
+    /* background-color: lightblue;
+    border: var(--board-border) solid; */
+}
+
+.space {
+    width: var(--space-size);
+    height: var(--space-size);
+    border-color: black;
+    border-width: 1px;
+    margin: var(--space-margin);
+    border-radius: calc(var(--space-size) / 2);
+    background-color: white;
+}
+
+.piece1 {
+    background-color: red;
+}
+
+.piece2 {
+    background-color: yellow;
+}
+
+.next-turn {
+    text-decoration: underline;
+}
+
+.space:not([disabled]) {
+    border-width: 2px;
+}
