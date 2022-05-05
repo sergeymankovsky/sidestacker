@@ -4,7 +4,8 @@ DROP TABLE IF EXISTS moves;
 CREATE TABLE games (
     id TEXT NOT NULL,
     player1_id TEXT NOT NULL,
-    player2_id TEXT NULL
+    player2_id TEXT NULL,
+    opponent TEXT NOT NULL
 );
 
 CREATE TABLE moves (

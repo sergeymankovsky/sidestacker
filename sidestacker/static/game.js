@@ -27,30 +27,30 @@
         return piece == 1 ? 2 : 1
     }
 
-    function onTurn(data) {
-        document.querySelector('#player' + otherPiece(data.turn)).classList.remove('next-turn')
-        document.querySelector('#player' + data.turn).classList.add('next-turn')
-        toggleDisabled(data.turn, data.availableMoves)
-        document.querySelector('#status').innerHTML = data.turn == PIECE ? 'Your turn' : 'Opponent\'s turn'
+    function onUpdate(data) {
+        if (data.move) {
+            const button = document.querySelector(`button[data-row="${data.move.row}"][data-col="${data.move.col}"]`)
+            button.classList.add('piece' + data.move.piece)
+            button.setAttribute('disabled', '')
+        }
+
+        if (data.winningMove) {
+            const message = data.move.piece == PIECE ? `Player ${data.move.piece} won` : `Player ${otherPiece(data.move.piece)} lost`
+            toggleDisabled(data.move.piece, [])
+            document.querySelector('#status').innerHTML = message
+        } else {
+            document.querySelector('#player' + otherPiece(data.turn)).classList.remove('next-turn')
+            document.querySelector('#player' + data.turn).classList.add('next-turn')
+            toggleDisabled(data.turn, data.availableMoves)
+            document.querySelector('#status').innerHTML = data.turn == PIECE ? 'Your turn' : 'Opponent\'s turn'
+        }
     }
 
-    function onMoveClick(event) {
+    function onMove(event) {
         const button = event.target
         const row = parseInt(button.dataset.row)
         const col = parseInt(button.dataset.col)
         socket.emit('move', {row, col})
-    }
-
-    function onMove(data) {
-        const button = document.querySelector(`button[data-row="${data.row}"][data-col="${data.col}"]`)
-        button.classList.add('piece' + data.piece)
-        button.setAttribute('disabled', '')
-    }
-
-    function onFinish(data) {
-        const message = data.winner == PIECE ? `Player ${data.winner} won` : `Player ${otherPiece(data.winner)} lost`
-        toggleDisabled(data.winner, [])
-        document.querySelector('#status').innerHTML = message
     }
 
     function onEnd(data) {
@@ -60,11 +60,9 @@
     const socket = io()
 
     window.addEventListener('DOMContentLoaded', () => {
-        document.querySelectorAll('.space').forEach(button => button.addEventListener('click', onMoveClick))
+        document.querySelectorAll('.space').forEach(button => button.addEventListener('click', onMove))
         socket.on('join', onJoin)
-        socket.on('turn', onTurn)
-        socket.on('move', onMove)
-        socket.on('finish', onFinish)
+        socket.on('update', onUpdate)
         socket.on('end', onEnd)
     })
 })()
