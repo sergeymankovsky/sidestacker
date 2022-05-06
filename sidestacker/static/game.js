@@ -14,11 +14,12 @@
             const col = parseInt(button.dataset.col)
             let hasPiece = button.classList.contains('piece1') || button.classList.contains('piece2')
             if (!hasPiece) {
-                if (turn == PIECE && availableMoves[row] && availableMoves[row].includes(col)) {
-                    button.removeAttribute('disabled')
-                } else {
-                    button.setAttribute('disabled', '')
-                }
+                button.setAttribute('disabled', '')
+                availableMoves.forEach((move) => {
+                    if (turn == PIECE && move[0] == row && move[1] == col) {
+                        button.removeAttribute('disabled')
+                    }
+                })
             }
         })
     }

@@ -1,11 +1,10 @@
 from random import choice
-from itertools import chain
 import uuid
 from flask import (
     Blueprint, render_template, session, redirect, url_for, request,
     current_app as app, g
 )
-
+import math
 from flask_socketio import emit, join_room, leave_room
 from sidestacker.db import get_db
 from . import socketio
@@ -81,28 +80,134 @@ def get_board(game_id):
     return board
 
 
-def avaiable_moves(game_id):
-    board = get_board(game_id)
+def copy_board(board):
+    return [row.copy() for row in board]
+
+
+def avaiable_moves(board):
     result = []
-    for row in board:
+    for index, row in enumerate(board):
         min_col = row.index(0) if 0 in row else -1
         if min_col != -1:
+            result.append((index, min_col))
             max_col = max(i for i, col in enumerate(row) if col == 0)
-            result.append([min_col, max_col])
-        else:
-            result.append([])
+            if max_col != min_col:
+                result.append((index, max_col))
     return result
 
 
-def bot_move(game_id):
-    moves = avaiable_moves(game_id)
-    moves = [[(i, r[0]), (i, r[1])] for i, r in enumerate(moves) if r]
-    moves = list(chain(*moves))
+def set_piece(board, move, piece):
+    board[move[0]][move[1]] = piece
+
+
+def score_window(window, piece):
+    score = 0
+    if window.count(piece) == 4:
+        score += 100
+    elif window.count(piece) == 3 and window.count(0) == 1:
+        score += 5
+    elif window.count(piece) == 2 and window.count(0) == 2:
+        score += 2
+    if window.count(other_piece(piece)) == 3 and window.count(0) == 1:
+        score -= 4
+    return score
+
+
+def score_move(board, piece):
+    center_col = app.config['BOARD_COLS'] // 2
+    center_count = [row[center_col] for row in board].count(piece)
+    score = center_count * 3
+
+    for c in range(app.config['BOARD_COLS'] - 3):
+        for r in range(app.config['BOARD_ROWS']):
+            window = [board[r][c], board[r][c + 1], board[r][c + 2], board[r][c + 3]]
+            score += score_window(window, piece)
+    for c in range(app.config['BOARD_COLS']):
+        for r in range(app.config['BOARD_ROWS'] - 3):
+            window = [board[r][c], board[r + 1][c], board[r + 2][c], board[r + 3][c]]
+            score += score_window(window, piece)
+    for c in range(app.config['BOARD_COLS'] - 3):
+        for r in range(app.config['BOARD_ROWS'] - 3):
+            window = [board[r][c], board[r + 1][c + 1], board[r + 2][c + 2], board[r + 3][c + 3]]
+            score += score_window(window, piece)
+    for c in range(app.config['BOARD_COLS'] - 3):
+        for r in range(3, app.config['BOARD_ROWS']):
+            window = [board[r][c], board[r - 1][c + 1], board[r - 2][c + 2], board[r - 3][c + 3]]
+            score += score_window(window, piece)
+
+    return score
+
+
+def is_terminal_move(board, bot_piece):
+    return (winning_move(board, bot_piece) or
+            winning_move(board, other_piece(bot_piece)) or
+            not avaiable_moves(board))
+
+
+def minimax(board, depth, alpha, beta, maximizing_player, bot_piece):
+    player_piece = other_piece(bot_piece)
+    moves = avaiable_moves(board)
+    is_terminal = is_terminal_move(board, bot_piece)
+    if depth == 0 or is_terminal:
+        if is_terminal:
+            if winning_move(board, bot_piece):
+                return None, math.inf
+            elif winning_move(board, player_piece):
+                return None, -math.inf
+            else:
+                return None, 0
+        else:
+            return (None, score_move(board, bot_piece))
+    if maximizing_player:
+        value = -math.inf
+        move = choice(moves)
+        for m in moves:
+            board_copy = copy_board(board)
+            set_piece(board_copy, m, bot_piece)
+            new_score = minimax(
+                board_copy, depth - 1, alpha, beta, False, bot_piece)[1]
+            if new_score > value:
+                value = new_score
+                move = m
+            alpha = max(alpha, value)
+            if alpha >= beta:
+                break
+        return move, value
+    else:
+        value = math.inf
+        move = choice(moves)
+        for m in moves:
+            board_copy = copy_board(board)
+            set_piece(board_copy, m, player_piece)
+            new_score = minimax(
+                board_copy, depth - 1, alpha, beta, True, bot_piece)[1]
+            if new_score < value:
+                value = new_score
+                move = m
+            beta = min(beta, value)
+            if alpha >= beta:
+                break
+        return move, value
+
+
+def bot_move(board, bot_piece):
+    player_piece = other_piece(bot_piece)
+    moves = avaiable_moves(board)
+
+    for move in moves:
+        board_copy = copy_board(board)
+        set_piece(board_copy, move, bot_piece)
+        if winning_move(board_copy, bot_piece):
+            return move
+    for move in moves:
+        board_copy = copy_board(board)
+        set_piece(board_copy, move, player_piece)
+        if winning_move(board_copy, player_piece):
+            return move
     return choice(moves) if moves else None
 
 
-def winning_move(game_id, piece):
-    board = get_board(game_id)
+def winning_move(board, piece):
     # Check horizontal
     for c in range(app.config['BOARD_COLS'] - 3):
         for r in range(app.config['BOARD_ROWS']):
@@ -187,12 +292,13 @@ def on_connect():
         emit('join', room=game_id)
 
         moves = get_moves(game_id)
+        board = get_board(game_id)
         for move in moves:
             send_update(game_id, move)
         if not moves:
             emit('update', {
                 'turn': 1,
-                'availableMoves': avaiable_moves(game_id)
+                'availableMoves': avaiable_moves(board)
             }, room=game_id)
 
 
@@ -209,22 +315,22 @@ def on_move(move):
     send_update(game_id, move)
 
     game = get_game(game_id)
-    is_winning = winning_move(game_id, move['piece'])
-    if game['opponent'] == 'bot' and not is_winning:
-        make_bot_move(game_id, other_piece(move['piece']))
-
-
-def make_bot_move(game_id, bot_piece):
-    row, col = bot_move(game_id)
-    move = {'piece': bot_piece, 'row': row, 'col': col}
-    add_move(game_id, move)
-    send_update(game_id, move)
+    board = get_board(game_id)
+    player_won = winning_move(board, move['piece'])
+    if game['opponent'] == 'bot' and not player_won:
+        bot_piece = other_piece(move['piece'])
+        # move = bot_move(board, bot_piece)
+        move, _ = minimax(board, 4, -math.inf, math.inf, True, bot_piece)
+        move = {'piece': bot_piece, 'row': move[0], 'col': move[1]}
+        add_move(game_id, move)
+        send_update(game_id, move)
 
 
 def send_update(game_id, move):
+    board = get_board(game_id)
     emit('update', {
         'move': move,
         'turn': other_piece(move['piece']),
-        'availableMoves': avaiable_moves(game_id),
-        'winningMove': winning_move(game_id, move['piece'])
+        'availableMoves': avaiable_moves(board),
+        'winningMove': winning_move(board, move['piece'])
     }, room=game_id)
