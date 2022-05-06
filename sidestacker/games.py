@@ -41,11 +41,11 @@ def get_game(game_id):
     return cursor.fetchone()
 
 
-def add_move(game_id, piece, row, col):
+def add_move(game_id, move):
     db = get_db()
     db.execute(
         'INSERT INTO moves (game_id, piece, row, col) VALUES (?, ?, ?, ?)',
-        (game_id, piece, row, col)
+        (game_id, move['piece'], move['row'], move['col'])
     )
     db.commit()
 
@@ -168,7 +168,7 @@ def game(game_id):
         session['player_id'] = get_uuid()
 
     game = get_game(game_id)
-    if not game['player2_id']:
+    if not game['player2_id'] and game['opponent'] == 'friend':
         join_game(session['game_id'], session['player_id'])
 
     session['piece'] = get_piece(game_id)
@@ -188,13 +188,8 @@ def on_connect():
 
         moves = get_moves(game_id)
         for move in moves:
-            emit('update', {
-                'move': move,
-                'turn': other_piece(move['piece']),
-                'availableMoves': avaiable_moves(game_id),
-                'winningMove': winning_move(game_id, move['piece'])
-            }, room=game_id)
-        else:
+            send_update(game_id, move)
+        if not moves:
             emit('update', {
                 'turn': 1,
                 'availableMoves': avaiable_moves(game_id)
@@ -210,16 +205,11 @@ def on_disconnect():
 def on_move(move):
     game_id = session['game_id']
     move['piece'] = session['piece']
-    add_move(game_id, move['piece'], move['row'], move['col'])
-    is_winning = winning_move(game_id, move['piece'])
-    emit('update', {
-        'move': move,
-        'turn': other_piece(move['piece']),
-        'availableMoves': avaiable_moves(game_id),
-        'winningMove': is_winning
-    }, room=game_id)
+    add_move(game_id, move)
+    send_update(game_id, move)
 
     game = get_game(game_id)
+    is_winning = winning_move(game_id, move['piece'])
     if game['opponent'] == 'bot' and not is_winning:
         make_bot_move(game_id, other_piece(move['piece']))
 
@@ -227,10 +217,14 @@ def on_move(move):
 def make_bot_move(game_id, bot_piece):
     row, col = bot_move(game_id)
     move = {'piece': bot_piece, 'row': row, 'col': col}
-    add_move(game_id, move['piece'], move['row'], move['col'])
+    add_move(game_id, move)
+    send_update(game_id, move)
+
+
+def send_update(game_id, move):
     emit('update', {
         'move': move,
-        'turn': other_piece(bot_piece),
+        'turn': other_piece(move['piece']),
         'availableMoves': avaiable_moves(game_id),
         'winningMove': winning_move(game_id, move['piece'])
     }, room=game_id)
